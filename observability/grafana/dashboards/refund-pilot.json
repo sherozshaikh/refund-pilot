@@ -1,0 +1,330 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "refresh": "10s",
+  "schemaVersion": 36,
+  "tags": ["refund-pilot"],
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Refund Pilot",
+  "uid": "refund-pilot-v2",
+  "version": 2,
+  "panels": [
+
+    { "type": "row", "title": "Overview", "collapsed": false, "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 }, "id": 100 },
+
+    {
+      "type": "stat", "id": 1, "title": "Total Requests",
+      "gridPos": { "x": 0, "y": 1, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] }, "unit": "short" }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background" },
+      "targets": [{ "datasource": "Prometheus", "expr": "sum(refund_requests_total)", "legendFormat": "Total", "refId": "A" }]
+    },
+
+    {
+      "type": "stat", "id": 2, "title": "Approval Rate",
+      "gridPos": { "x": 4, "y": 1, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "thresholds" }, "unit": "percent",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 40 }, { "color": "green", "value": 60 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background" },
+      "targets": [{
+        "datasource": "Prometheus",
+        "expr": "sum(refund_requests_total{decision=\"approved\"}) / sum(refund_requests_total) * 100",
+        "legendFormat": "Approval %", "refId": "A"
+      }]
+    },
+
+    {
+      "type": "stat", "id": 3, "title": "Total API Cost (USD)",
+      "gridPos": { "x": 8, "y": 1, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "thresholds" }, "unit": "currencyUSD", "decimals": 4,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.5 }, { "color": "red", "value": 2.0 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background" },
+      "targets": [{ "datasource": "Prometheus", "expr": "sum(refund_cost_usd_total)", "legendFormat": "Cost USD", "refId": "A" }]
+    },
+
+    {
+      "type": "stat", "id": 4, "title": "Total Input Tokens",
+      "gridPos": { "x": 12, "y": 1, "w": 4, "h": 4 },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "unit": "short", "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "value" },
+      "targets": [{ "datasource": "Prometheus", "expr": "sum(refund_tokens_input_total)", "legendFormat": "Input Tokens", "refId": "A" }]
+    },
+
+    {
+      "type": "stat", "id": 5, "title": "Total Output Tokens",
+      "gridPos": { "x": 16, "y": 1, "w": 4, "h": 4 },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "unit": "short", "thresholds": { "mode": "absolute", "steps": [{ "color": "purple", "value": null }] } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "value" },
+      "targets": [{ "datasource": "Prometheus", "expr": "sum(refund_tokens_output_total)", "legendFormat": "Output Tokens", "refId": "A" }]
+    },
+
+    {
+      "type": "stat", "id": 6, "title": "Injection Detections",
+      "gridPos": { "x": 20, "y": 1, "w": 4, "h": 4 },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "thresholds" }, "unit": "short",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background" },
+      "targets": [{ "datasource": "Prometheus", "expr": "sum(refund_injection_detected_total)", "legendFormat": "Injections", "refId": "A" }]
+    },
+
+    { "type": "row", "title": "Traffic & Decisions", "collapsed": false, "gridPos": { "x": 0, "y": 5, "w": 24, "h": 1 }, "id": 101 },
+
+    {
+      "type": "timeseries", "id": 10, "title": "Request Rate by Decision",
+      "gridPos": { "x": 0, "y": 6, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "custom": { "lineWidth": 2, "fillOpacity": 10, "spanNulls": true } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "approved" }, "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "denied" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "escalated" }, "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "fallback" }, "properties": [{ "id": "color", "value": { "fixedColor": "gray", "mode": "fixed" } }] }
+        ]
+      },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["sum", "lastNotNull"] } },
+      "targets": [{
+        "datasource": "Prometheus",
+        "expr": "sum by (decision) (rate(refund_requests_total[5m]))",
+        "legendFormat": "{{decision}}", "refId": "A"
+      }]
+    },
+
+    {
+      "type": "piechart", "id": 11, "title": "Decision Breakdown (all time)",
+      "gridPos": { "x": 12, "y": 6, "w": 12, "h": 8 },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "options": { "pieType": "donut", "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] } },
+      "targets": [{
+        "datasource": "Prometheus",
+        "expr": "sum by (decision) (refund_requests_total)",
+        "legendFormat": "{{decision}}", "refId": "A"
+      }]
+    },
+
+    { "type": "row", "title": "Latency", "collapsed": false, "gridPos": { "x": 0, "y": 14, "w": 24, "h": 1 }, "id": 102 },
+
+    {
+      "type": "timeseries", "id": 20, "title": "P50 / P95 / P99 Latency",
+      "gridPos": { "x": 0, "y": 15, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": { "unit": "s", "custom": { "lineWidth": 2, "fillOpacity": 5, "spanNulls": true } }
+      },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "lastNotNull"] } },
+      "targets": [
+        { "datasource": "Prometheus", "expr": "histogram_quantile(0.50, sum by (le) (rate(refund_request_latency_seconds_bucket[5m])))", "legendFormat": "P50", "refId": "A" },
+        { "datasource": "Prometheus", "expr": "histogram_quantile(0.95, sum by (le) (rate(refund_request_latency_seconds_bucket[5m])))", "legendFormat": "P95", "refId": "B" },
+        { "datasource": "Prometheus", "expr": "histogram_quantile(0.99, sum by (le) (rate(refund_request_latency_seconds_bucket[5m])))", "legendFormat": "P99", "refId": "C" }
+      ]
+    },
+
+    {
+      "type": "timeseries", "id": 21, "title": "Latency by Decision (P95)",
+      "gridPos": { "x": 12, "y": 15, "w": 12, "h": 8 },
+      "description": "Are denials faster than approvals? Escalations slowest?",
+      "fieldConfig": {
+        "defaults": { "unit": "s", "custom": { "lineWidth": 2, "spanNulls": true } }
+      },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull"] } },
+      "targets": [{
+        "datasource": "Prometheus",
+        "expr": "histogram_quantile(0.95, sum by (le, decision) (rate(refund_request_latency_seconds_bucket[5m])))",
+        "legendFormat": "P95 {{decision}}", "refId": "A"
+      }]
+    },
+
+    { "type": "row", "title": "Tokens & Cost", "collapsed": false, "gridPos": { "x": 0, "y": 23, "w": 24, "h": 1 }, "id": 103 },
+
+    {
+      "type": "timeseries", "id": 30, "title": "Token Consumption Rate",
+      "gridPos": { "x": 0, "y": 24, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "custom": { "lineWidth": 2, "fillOpacity": 10, "spanNulls": true } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Input tokens/min" }, "properties": [{ "id": "color", "value": { "fixedColor": "blue", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Output tokens/min" }, "properties": [{ "id": "color", "value": { "fixedColor": "purple", "mode": "fixed" } }] }
+        ]
+      },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "sum"] } },
+      "targets": [
+        { "datasource": "Prometheus", "expr": "rate(refund_tokens_input_total[5m]) * 60", "legendFormat": "Input tokens/min", "refId": "A" },
+        { "datasource": "Prometheus", "expr": "rate(refund_tokens_output_total[5m]) * 60", "legendFormat": "Output tokens/min", "refId": "B" }
+      ]
+    },
+
+    {
+      "type": "timeseries", "id": 31, "title": "API Cost Rate (USD/hr)",
+      "gridPos": { "x": 12, "y": 24, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": { "unit": "currencyUSD", "decimals": 5, "custom": { "lineWidth": 2, "fillOpacity": 15, "spanNulls": true } }
+      },
+      "options": { "tooltip": { "mode": "single" }, "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "lastNotNull"] } },
+      "targets": [
+        { "datasource": "Prometheus", "expr": "rate(refund_cost_usd_total[5m]) * 3600", "legendFormat": "$/hr", "refId": "A" }
+      ]
+    },
+
+    { "type": "row", "title": "Security & Reliability", "collapsed": false, "gridPos": { "x": 0, "y": 55, "w": 24, "h": 1 }, "id": 104 },
+
+    {
+      "type": "timeseries", "id": 40, "title": "Injection Detections Over Time",
+      "gridPos": { "x": 0, "y": 56, "w": 12, "h": 7 },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "custom": { "lineWidth": 2, "fillOpacity": 20, "spanNulls": true } }
+      },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["sum"] } },
+      "targets": [
+        { "datasource": "Prometheus", "expr": "rate(refund_injection_detected_total[5m]) * 60", "legendFormat": "Injections/min (all)", "refId": "A" },
+        { "datasource": "Prometheus", "expr": "sum by (decision) (rate(refund_injection_by_decision_total[5m])) * 60", "legendFormat": "by decision: {{decision}}", "refId": "B" }
+      ]
+    },
+
+    {
+      "type": "timeseries", "id": 41, "title": "Fallback Rate",
+      "gridPos": { "x": 12, "y": 56, "w": 12, "h": 7 },
+      "description": "Fallback fires when Claude API is unavailable or quota exhausted.",
+      "fieldConfig": {
+        "defaults": { "unit": "percentunit", "custom": { "lineWidth": 2, "fillOpacity": 15, "spanNulls": true },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 0.1 }, { "color": "red", "value": 0.3 }] }
+        }
+      },
+      "options": { "tooltip": { "mode": "single" }, "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "lastNotNull"] } },
+      "targets": [{
+        "datasource": "Prometheus",
+        "expr": "rate(refund_fallback_total[5m]) / rate(refund_requests_total[5m])",
+        "legendFormat": "Fallback rate", "refId": "A"
+      }]
+    },
+
+    { "type": "row", "title": "Prompt Cache Efficiency", "collapsed": false, "gridPos": { "x": 0, "y": 32, "w": 24, "h": 1 }, "id": 106 },
+
+    {
+      "type": "stat", "id": 60, "title": "Cache Read Tokens (hits)",
+      "gridPos": { "x": 0, "y": 33, "w": 6, "h": 4 },
+      "description": "Tokens served from cache — 90% cheaper than input tokens.",
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [{ "datasource": "Prometheus", "expr": "sum(refund_cache_read_tokens_total)", "legendFormat": "Cache reads", "refId": "A" }]
+    },
+
+    {
+      "type": "stat", "id": 61, "title": "Cache Write Tokens (misses)",
+      "gridPos": { "x": 6, "y": 33, "w": 6, "h": 4 },
+      "description": "Tokens written to cache on first miss — 25% surcharge on these.",
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "orange", "value": null }] } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "targets": [{ "datasource": "Prometheus", "expr": "sum(refund_cache_creation_tokens_total)", "legendFormat": "Cache writes", "refId": "A" }]
+    },
+
+    {
+      "type": "stat", "id": 62, "title": "Cache Hit Rate",
+      "gridPos": { "x": 12, "y": 33, "w": 6, "h": 4 },
+      "description": "cache_read / (cache_read + cache_creation). High = saving money.",
+      "fieldConfig": {
+        "defaults": { "unit": "percentunit", "decimals": 1, "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 0.5 }, { "color": "green", "value": 0.8 }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [{
+        "datasource": "Prometheus",
+        "expr": "sum(refund_cache_read_tokens_total) / (sum(refund_cache_read_tokens_total) + sum(refund_cache_creation_tokens_total))",
+        "legendFormat": "Hit rate", "refId": "A"
+      }]
+    },
+
+    {
+      "type": "timeseries", "id": 63, "title": "Cache Tokens Over Time",
+      "gridPos": { "x": 0, "y": 37, "w": 24, "h": 7 },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "custom": { "lineWidth": 2, "fillOpacity": 10, "spanNulls": true } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Cache reads/min" }, "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Cache writes/min" }, "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] }
+        ]
+      },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["sum"] } },
+      "targets": [
+        { "datasource": "Prometheus", "expr": "rate(refund_cache_read_tokens_total[5m]) * 60", "legendFormat": "Cache reads/min", "refId": "A" },
+        { "datasource": "Prometheus", "expr": "rate(refund_cache_creation_tokens_total[5m]) * 60", "legendFormat": "Cache writes/min", "refId": "B" }
+      ]
+    },
+
+    { "type": "row", "title": "HTTP & Infrastructure", "collapsed": false, "gridPos": { "x": 0, "y": 44, "w": 24, "h": 1 }, "id": 105 },
+
+    {
+      "type": "timeseries", "id": 50, "title": "HTTP Request Rate by Status",
+      "gridPos": { "x": 0, "y": 41, "w": 12, "h": 7 },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "custom": { "lineWidth": 2, "fillOpacity": 5, "spanNulls": true } }
+      },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean"] } },
+      "targets": [{
+        "datasource": "Prometheus",
+        "expr": "sum by (status) (rate(http_requests_total[5m]))",
+        "legendFormat": "HTTP {{status}}", "refId": "A"
+      }]
+    },
+
+    {
+      "type": "timeseries", "id": 51, "title": "HTTP 4xx / 5xx Error Rate",
+      "gridPos": { "x": 12, "y": 41, "w": 12, "h": 7 },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "custom": { "lineWidth": 2, "fillOpacity": 20, "spanNulls": true } }
+      },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] } },
+      "targets": [
+        { "datasource": "Prometheus", "expr": "sum(rate(http_requests_total{status=~\"4..\"}[5m]))", "legendFormat": "4xx errors", "refId": "A" },
+        { "datasource": "Prometheus", "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m]))", "legendFormat": "5xx errors", "refId": "B" }
+      ]
+    },
+
+    {
+      "type": "timeseries", "id": 52, "title": "Celery Queue Depth (refund_requests)",
+      "gridPos": { "x": 0, "y": 48, "w": 12, "h": 7 },
+      "description": "Tasks waiting to be picked up. Spikes = worker backpressure.",
+      "fieldConfig": {
+        "defaults": { "unit": "short", "custom": { "lineWidth": 2, "fillOpacity": 20, "spanNulls": true },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 5 }, { "color": "red", "value": 20 }] }
+        }
+      },
+      "options": { "tooltip": { "mode": "single" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [{
+        "datasource": "Prometheus",
+        "expr": "celery_queue_length{queue_name=\"refund_requests\"}",
+        "legendFormat": "Queue depth", "refId": "A"
+      }]
+    },
+
+    {
+      "type": "timeseries", "id": 53, "title": "Conversation History Depth (P50/P95)",
+      "gridPos": { "x": 12, "y": 48, "w": 12, "h": 7 },
+      "description": "Prior messages loaded per request — tracks multi-turn usage.",
+      "fieldConfig": {
+        "defaults": { "unit": "short", "custom": { "lineWidth": 2, "fillOpacity": 10, "spanNulls": true } }
+      },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] } },
+      "targets": [
+        { "datasource": "Prometheus", "expr": "histogram_quantile(0.50, sum by (le) (rate(refund_conversation_history_messages_bucket[5m])))", "legendFormat": "P50 messages", "refId": "A" },
+        { "datasource": "Prometheus", "expr": "histogram_quantile(0.95, sum by (le) (rate(refund_conversation_history_messages_bucket[5m])))", "legendFormat": "P95 messages", "refId": "B" }
+      ]
+    }
+
+  ]
+}

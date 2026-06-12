@@ -1,0 +1,121 @@
+[project]
+name = "refund-pilot"
+version = "0.1.0"
+description = "Production-grade AI refund agent — deterministic LangGraph pipeline over Claude with tool forcing, SSE streaming, full observability (OTel/Prometheus/Loki/Tempo/Grafana), and React 19 admin dashboard. Dockerized."
+requires-python = ">=3.13"
+license = { text = "MIT" }
+authors = [
+    {name = "SherozShaikh", email = "shaikh.sheroz07@gmail.com"},
+]
+keywords = [
+    "langgraph",
+    "claude",
+    "anthropic",
+    "refund-agent",
+    "llm",
+    "fastapi",
+    "celery",
+    "sse",
+    "observability",
+    "opentelemetry",
+    "react",
+    "tool-calling",
+    "structured-output",
+]
+dependencies = [
+    "fastapi>=0.115.0,<0.116",
+    "uvicorn[standard]>=0.34.0,<0.35",
+    "celery>=5.5.0,<5.6",
+    "redis>=5.0.0,<6",
+    "sqlalchemy[asyncio]>=2.0.0,<3",
+    "alembic>=1.16.0,<2",
+    "psycopg>=3.0.0,<4",
+    "pydantic>=2.0.0,<3",
+    "pydantic-settings>=2.0.0,<3",
+    "langgraph>=0.2.0",
+    "langchain-anthropic>=0.3.0",
+    "langsmith>=0.2.0",
+    "opentelemetry-sdk>=1.0.0,<2",
+    "opentelemetry-instrumentation-fastapi>=0.45b0",
+    "opentelemetry-exporter-otlp>=1.0.0,<2",
+    "prometheus-fastapi-instrumentator>=7.0.0",
+    "loguru>=0.7.0,<0.8",
+    "httpx>=0.28.0,<0.29",
+    "tenacity>=9.0.0",
+    "anthropic>=0.40.0",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "python-multipart>=0.0.20",
+    "email-validator>=2.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/refund_pilot"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "mypy>=1.13.0",
+    "ruff>=0.8.0",
+    "types-passlib>=1.7.7",
+    "types-python-jose>=3.3.0",
+    "pre-commit>=4.6.0",
+]
+
+[tool.ruff]
+src = ["src"]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501", "B008"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["refund_pilot"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+ignore_missing_imports = true
+plugins = ["pydantic.mypy"]
+
+# tenacity.retry() returns Any — untyped-decorator is unavoidable without tenacity stubs
+[[tool.mypy.overrides]]
+module = ["refund_pilot.agent.tools"]
+disable_error_code = ["untyped-decorator"]
+
+# LangGraph's add_node overloads use internal _Node aliases that don't match standard Callable
+[[tool.mypy.overrides]]
+module = ["refund_pilot.agent.graph"]
+disable_error_code = ["call-overload"]
+
+# Celery @app.task decorator has no type stubs
+[[tool.mypy.overrides]]
+module = ["refund_pilot.workers.tasks"]
+disable_error_code = ["untyped-decorator"]
+
+[[tool.mypy.overrides]]
+module = ["tests.unit.test_pipeline_config"]
+disable_error_code = ["call-arg"]
+
+[[tool.mypy.overrides]]
+module = ["refund_pilot.api.middleware.logging", "refund_pilot.api.middleware.request_id"]
+disable_error_code = ["operator"]
+
+[[tool.mypy.overrides]]
+module = ["refund_pilot.db.migrations.env"]
+disable_error_code = ["arg-type"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+    "no_api: tests safe to run without ANTHROPIC_API_KEY",
+    "requires_api: tests that require live API keys",
+]

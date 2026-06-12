@@ -1,0 +1,141 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: refund_pilot
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: refund_pilot
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U refund_pilot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:8-alpine
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    image: sherozshaikh/refund-pilot-backend:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    ports:
+      - "8000:8000"
+    env_file: .env
+    volumes:
+      - ./logs/backend:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  worker:
+    image: sherozshaikh/refund-pilot-worker:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.worker
+    env_file: .env
+    volumes:
+      - ./logs/worker:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    deploy:
+      replicas: 2
+
+  celery-exporter:
+    image: ovalmoney/celery-exporter
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    ports:
+      - "9540:9540"
+    depends_on:
+      - redis
+
+  frontend:
+    image: sherozshaikh/refund-pilot-frontend:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+      args:
+        VITE_LANGSMITH_BASE_URL: ${VITE_LANGSMITH_BASE_URL:-}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.123.0
+    volumes:
+      - ./observability/otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+
+  loki:
+    image: grafana/loki:latest
+    volumes:
+      - ./observability/loki-config.yaml:/etc/loki/config.yaml
+      - loki_data:/loki
+    command: ["-config.file=/etc/loki/config.yaml"]
+    ports:
+      - "3100:3100"
+
+  tempo:
+    image: grafana/tempo:latest
+    volumes:
+      - ./observability/tempo-config.yaml:/etc/tempo.yaml
+      - tempo_data:/var/tempo
+    command: ["-config.file=/etc/tempo.yaml"]
+    ports:
+      - "3200:3200"
+
+  grafana:
+    image: grafana/grafana:latest
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./observability/grafana/datasources:/etc/grafana/provisioning/datasources
+      - ./observability/grafana/dashboards:/etc/grafana/provisioning/dashboards
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
+  redis_data:
+  grafana_data:
+  loki_data:
+  tempo_data:
+  prometheus_data:

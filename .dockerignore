@@ -1,0 +1,33 @@
+# Secrets — never bake into image
+.env
+.envrc
+*.pem
+*.key
+
+# Git
+.git
+.gitignore
+.github
+
+# Python artifacts
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+.venv
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Frontend (built separately)
+frontend/node_modules/
+frontend/dist/
+
+# Test artifacts
+tests/
+.pre-commit-config.yaml

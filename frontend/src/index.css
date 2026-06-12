@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.streaming-cursor::after {
+  content: '▋';
+  display: inline-block;
+  animation: blink 0.7s step-end infinite;
+  color: #9ca3af;
+  margin-left: 1px;
+  font-size: 0.9em;
+}
+
+textarea { resize: none; }

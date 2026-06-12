@@ -1,0 +1,12 @@
+FROM python:3.13-slim AS runtime
+WORKDIR /app
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+RUN apt-get update && apt-get install -y --no-install-recommends curl=8.14.1-2+deb13u3 libpq5=17.10-0+deb13u1 && rm -rf /var/lib/apt/lists/*
+COPY pyproject.toml uv.lock ./
+COPY src/ src/
+RUN uv sync --frozen --no-dev
+COPY alembic.ini /app/alembic.ini
+COPY src/refund_pilot/db/migrations /app/src/refund_pilot/db/migrations
+COPY src/refund_pilot/agent/policy.txt /app/policy.txt
+ENV PATH="/app/.venv/bin:$PATH"
+ENTRYPOINT ["sh", "-c", "alembic upgrade head && python -m refund_pilot.data.seed && uvicorn refund_pilot.api.app:app --host 0.0.0.0 --port 8000 --timeout-graceful-shutdown 30"]
