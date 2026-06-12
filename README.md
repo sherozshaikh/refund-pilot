@@ -182,7 +182,7 @@ See [docs/docker-quickstart.md](docs/docker-quickstart.md) for model swap, polic
 ![refund-lifecycle](docs/images/refund-request-lifecycle.png)
 
 ### LangGraph Agent Pipeline
-<img src="docs/images/langgraph-agent-pipeline.png" width="300" alt="LangGraph Agent Pipeline">
+<img src="docs/images/langgraph-agent-pipeline.png" width="50" alt="LangGraph Agent Pipeline">
 
 ### Database Schema
 ![database-schema](docs/images/database-schema.png)
