@@ -8,68 +8,88 @@ from typing import Any, cast
 
 from langsmith import get_current_run_tree, traceable
 from loguru import logger
+from pydantic import BaseModel, field_validator
 
 from refund_pilot.workers.celery_app import app
+
+_RESTATE_CHAR_LIMIT = 80
+_CONV_DECISION_TTL = 1800  # 30 min — matches tool cache TTL
+
+
+_RESTATE_FALLBACK = "Your refund decision stands as previously communicated."
+_RESTATE_INJECTION_MSG = (
+    "Your refund decision stands. Manipulation attempts are logged "
+    "and notified to our customer service team."
+)
+
+
+class RestateResponse(BaseModel):
+    text: str
+
+    @field_validator("text")
+    @classmethod
+    def validate_text(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            return _RESTATE_FALLBACK
+        # Trust max_tokens=80 from Claude API call — no truncation here.
+        # Fallback constant is allowed to exceed 80 chars (static, not LLM output).
+        return v
 
 
 @traceable(run_type="llm", name="restate_decision")
 async def _restate_decision(
-    prior_run: Any,
+    prior_decision: str,
+    prior_reasoning: str,
     new_message: str,
     settings: Any,
-    pipeline_config: Any,
     log: Any,
 ) -> dict[str, object]:
     import anthropic as _anthropic
 
-    decision = prior_run.decision
-    prior_msg = prior_run.reasoning or ""
-
     prompt = (
-        f"You previously made a final refund decision: {decision.upper()}.\n"
-        f"Reasoning: {prior_msg[:300]}\n\n"
+        f"You previously made a final refund decision: {prior_decision.upper()}.\n"
+        f"Reasoning: {prior_reasoning[:300]}\n\n"
         f'The customer is now saying: "{new_message}"\n\n'
-        f"Restate your {decision} decision firmly but politely in 1-2 sentences. "
+        f"Restate your {prior_decision} decision firmly but politely. "
+        f"Your response MUST be {_RESTATE_CHAR_LIMIT} characters or fewer — count carefully. "
         f"Do NOT change the decision. Do NOT cite policy section numbers. "
         f"Do NOT use filler phrases. Be direct."
     )
 
     langsmith_run_id: str | None = None
     client: _anthropic.AsyncAnthropic | None = None
+    token_counts: dict[str, int] = {"input": 0, "output": 0}
+    text = f"Your refund request has been {prior_decision}. This decision is final."[
+        :_RESTATE_CHAR_LIMIT
+    ]
     try:
         client = _anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
         response = await client.messages.create(
             model=settings.claude_model,
-            max_tokens=80,
+            max_tokens=_RESTATE_CHAR_LIMIT,
             messages=[{"role": "user", "content": prompt}],
         )
         from anthropic.types import TextBlock as _TextBlock
 
         text_block = next((b for b in response.content if isinstance(b, _TextBlock)), None)
-        text = text_block.text.strip() if text_block else ""
+        raw_text = text_block.text if text_block else ""
+        validated = RestateResponse(text=raw_text)
+        text = validated.text
         token_counts = {
             "input": response.usage.input_tokens,
             "output": response.usage.output_tokens,
-            "cache_creation": 0,
-            "cache_read": 0,
         }
         rt = get_current_run_tree()
         langsmith_run_id = str(rt.id) if rt else None
     except Exception as exc:
         log.error("restate_failed", error=str(exc))
-        text = (
-            prior_run.reasoning[:200]
-            if prior_run.reasoning
-            else "Your prior request decision stands."
-        )
-        token_counts = {"input": 0, "output": 0, "cache_creation": 0, "cache_read": 0}
     finally:
         if client is not None:
             await client.close()
 
     return {
-        "decision": decision,
-        "run_id": str(prior_run.id),
+        "decision": prior_decision,
         "customer_facing_message": text,
         "injection_detected": False,
         "input_tokens": token_counts["input"],
@@ -135,24 +155,59 @@ async def _run(
             log.info("task_already_processed_skipping")
             return {"skipped": True, "task_id": task_id}
 
-        # Short-circuit: if conversation already has a terminal decision, restate it
-        prior_run_result = await db.execute(
-            select(AgentRun)
-            .where(AgentRun.conversation_id == uuid.UUID(conversation_id))
-            .where(AgentRun.decision.in_(["approved", "denied", "escalated"]))
-            .order_by(AgentRun.created_at.desc())
-            .limit(1)
-        )
-        prior_run = prior_run_result.scalar_one_or_none()
-        if prior_run is not None:
-            restate_start_ms = time.monotonic() * 1000
-            restate_result = await _restate_decision(
-                prior_run=prior_run,
-                new_message=message,
-                settings=settings,
-                pipeline_config=config,
-                log=log,
+        # Short-circuit: if conversation already has a terminal decision, restate it.
+        # Fix A: check Redis first (30 min TTL) before hitting DB.
+        prior_decision_str: str | None = None
+        prior_reasoning_str: str | None = None
+        prior_run_id_str: str | None = None
+        decision_cache_key = f"conv_decision:{conversation_id}"
+        async with aioredis.Redis.from_url(settings.redis_url, max_connections=1) as r_check:
+            cached_decision_raw = await r_check.get(decision_cache_key)
+        if cached_decision_raw:
+            cached_decision = json.loads(cached_decision_raw)
+            prior_decision_str = cached_decision.get("decision")
+            prior_reasoning_str = cached_decision.get("reasoning", "")
+            prior_run_id_str = cached_decision.get("run_id")
+            log.info("prior_decision_cache_hit", decision=prior_decision_str)
+        else:
+            prior_run_result = await db.execute(
+                select(AgentRun)
+                .where(AgentRun.conversation_id == uuid.UUID(conversation_id))
+                .where(AgentRun.decision.in_(["approved", "denied", "escalated"]))
+                .order_by(AgentRun.created_at.desc())
+                .limit(1)
             )
+            prior_run_obj = prior_run_result.scalar_one_or_none()
+            if prior_run_obj is not None:
+                prior_decision_str = prior_run_obj.decision
+                prior_reasoning_str = prior_run_obj.reasoning or ""
+                prior_run_id_str = str(prior_run_obj.id)
+
+        if prior_decision_str is not None:
+            from refund_pilot.agent.prompts import detect_injection
+
+            restate_injection = detect_injection(message)
+            restate_start_ms = time.monotonic() * 1000
+            if restate_injection:
+                log.warning("restate_injection_detected", message_preview=message[:80])
+                restate_result = {
+                    "decision": prior_decision_str,
+                    "customer_facing_message": _RESTATE_INJECTION_MSG,
+                    "injection_detected": True,
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "cache_creation_tokens": 0,
+                    "cache_read_tokens": 0,
+                    "langsmith_run_id": None,
+                }
+            else:
+                restate_result = await _restate_decision(
+                    prior_decision=prior_decision_str,
+                    prior_reasoning=prior_reasoning_str or "",
+                    new_message=message,
+                    settings=settings,
+                    log=log,
+                )
             latency_ms: int = int(time.monotonic() * 1000 - restate_start_ms)
 
             restate_run = AgentRun(
@@ -163,7 +218,7 @@ async def _run(
                 order_id=uuid.UUID(order_id) if order_id else None,
                 input_message=message,
                 decision="restate",
-                reasoning=f"Restate of run {prior_run.id}: {prior_run.decision}",
+                reasoning=f"Restate of run {prior_run_id_str}: {prior_decision_str}",
                 policy_clauses_cited=[],
                 trace_steps=[],
                 model_used=settings.claude_model,
@@ -171,7 +226,7 @@ async def _run(
                 output_tokens=cast(int, restate_result.get("output_tokens") or 0),
                 latency_ms=latency_ms,
                 langsmith_run_id=str(restate_result.get("langsmith_run_id") or ""),
-                injection_detected=False,
+                injection_detected=bool(restate_result.get("injection_detected", False)),
             )
             db.add(restate_run)
 
@@ -189,7 +244,7 @@ async def _run(
                 "decision": restate_result["decision"],
                 "run_id": str(restate_run.id),
                 "customer_facing_message": restate_result["customer_facing_message"],
-                "injection_detected": False,
+                "injection_detected": bool(restate_result.get("injection_detected", False)),
                 "input_tokens": restate_result["input_tokens"],
                 "output_tokens": restate_result["output_tokens"],
                 "cost_usd": 0.0,
@@ -290,6 +345,20 @@ async def _run(
         result_key = f"conv_result:{conversation_id}"
         async with aioredis.Redis.from_url(settings.redis_url, max_connections=1) as r:
             await r.set(result_key, json.dumps(result_data), ex=300)
+            # Fix A: cache terminal decision for fast restate lookup (skip DB on turn 2+)
+            if decision_str in ("approved", "denied", "escalated"):
+                decision_cache = json.dumps(
+                    {
+                        "decision": decision_str,
+                        "reasoning": (decision.reasoning if decision else "")[:300],
+                        "run_id": run_id,
+                    }
+                )
+                await r.set(
+                    f"conv_decision:{conversation_id}",
+                    decision_cache,
+                    ex=_CONV_DECISION_TTL,
+                )
         log.info("result_written_to_redis", key=result_key)
 
         return result_data

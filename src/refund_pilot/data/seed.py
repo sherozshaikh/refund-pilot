@@ -1,4 +1,5 @@
 """Idempotent seed CLI: uv run python -m refund_pilot.data.seed"""
+
 from __future__ import annotations
 
 import asyncio
@@ -23,13 +24,15 @@ async def seed_customers(db: AsyncSession) -> None:
         existing = await db.get(Customer, uuid.UUID(c.id))
         if existing:
             continue
-        db.add(Customer(
-            id=uuid.UUID(c.id),
-            name=c.name,
-            email=c.email,
-            phone=c.phone,
-            tier=c.tier,
-        ))
+        db.add(
+            Customer(
+                id=uuid.UUID(c.id),
+                name=c.name,
+                email=c.email,
+                phone=c.phone,
+                tier=c.tier,
+            )
+        )
         logger.info("seeded_customer", name=c.name, id=c.id)
     await db.commit()
 
@@ -40,17 +43,19 @@ async def seed_orders(db: AsyncSession) -> None:
         existing = await db.get(Order, uuid.UUID(o.id))
         if existing:
             continue
-        db.add(Order(
-            id=uuid.UUID(o.id),
-            customer_id=uuid.UUID(o.customer_id),
-            product_name=o.product_name,
-            product_sku=o.product_sku,
-            amount=o.amount,
-            status=o.status,
-            is_final_sale=o.is_final_sale,
-            purchase_date=o.purchase_date,
-            category=o.category,
-        ))
+        db.add(
+            Order(
+                id=uuid.UUID(o.id),
+                customer_id=uuid.UUID(o.customer_id),
+                product_name=o.product_name,
+                product_sku=o.product_sku,
+                amount=o.amount,
+                status=o.status,
+                is_final_sale=o.is_final_sale,
+                purchase_date=o.purchase_date,
+                category=o.category,
+            )
+        )
         logger.info("seeded_order", product=o.product_name, id=o.id)
     await db.commit()
 
@@ -61,14 +66,16 @@ async def seed_admin(db: AsyncSession) -> None:
     if existing.scalar_one_or_none() is not None:
         return
     settings = Settings()
-    db.add(AdminUser(
-        id=uuid.uuid4(),
-        username=settings.admin_username,
-        email=f"{settings.admin_username}@refund-pilot.local",
-        hashed_password=hash_password(settings.admin_password),
-        role="superadmin",
-        is_active=True,
-    ))
+    db.add(
+        AdminUser(
+            id=uuid.uuid4(),
+            username=settings.admin_username,
+            email=f"{settings.admin_username}@refund-pilot.local",
+            hashed_password=hash_password(settings.admin_password),
+            role="superadmin",
+            is_active=True,
+        )
+    )
     await db.commit()
     logger.info("seeded_admin", username=settings.admin_username)
 

@@ -85,7 +85,7 @@ export function RunDetail({ runId }: Props) {
         <section>
           <h3 className="mb-1 font-semibold text-gray-700">Policy clauses cited</h3>
           <ul className="space-y-1">
-            {run.policy_clauses_cited.map((clause, i) => (
+            {run.policy_clauses_cited.map((clause: string, i: number) => (
               <li key={i} className="rounded-md bg-amber-50 px-3 py-1.5 text-xs text-amber-800">
                 {clause}
               </li>

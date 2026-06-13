@@ -30,6 +30,8 @@ from refund_pilot.core.metrics import (
     REFUND_COST_USD,
     REFUND_LATENCY,
     REFUND_REQUESTS,
+    RESTATE_RESPONSE_CHARS,
+    RESTATE_TOTAL,
     TOKENS_INPUT,
     TOKENS_OUTPUT,
     TOKENS_PER_REQUEST_INPUT,
@@ -76,6 +78,11 @@ def _record_metrics(data: dict[str, Any]) -> None:
         CACHE_CREATION_TOKENS.inc(cache_creation)
     if cache_read > 0:
         CACHE_READ_TOKENS.inc(cache_read)
+    if decision == "restate":
+        RESTATE_TOTAL.inc()
+        msg_text: str = str(data.get("customer_facing_message", ""))
+        if msg_text:
+            RESTATE_RESPONSE_CHARS.observe(len(msg_text))
 
 
 class ConversationCreateRequest(BaseModel):
@@ -137,13 +144,14 @@ async def send_message(
     if not conv:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
 
-    # Per-customer rate limit via Redis sliding window
+    # Per-customer rate limit via Redis sliding window (5 req / 60s)
     async with aioredis.Redis.from_url(settings.redis_url) as r:
         rate_key = f"rate:{conv.customer_id}"
         current = await r.incr(rate_key)
         if current == 1:
-            await r.expire(rate_key, 60)  # 1-minute window
-    if current > 20:
+            await r.expire(rate_key, config.rate_limit_window_seconds)
+    if current > config.rate_limit_requests:
+        log.warning("rate_limit_exceeded", customer_id=str(conv.customer_id), count=current)
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Rate limit exceeded"
         )
@@ -182,27 +190,50 @@ async def stream_conversation(
     conversation_id: uuid.UUID,
     request: Request,
     settings: Settings = Depends(get_settings),
+    config: PipelineConfig = Depends(get_pipeline_config),
 ) -> StreamingResponse:
     """SSE stream — polls Redis for task result, streams tokens to client."""
 
     async def event_generator() -> AsyncGenerator[str]:
+        from loguru import logger as _logger
+
+        from refund_pilot.agent.fallback import FallbackHandler
+
         r = aioredis.Redis.from_url(settings.redis_url)
         result_key = f"conv_result:{conversation_id}"
+        log = _logger.bind(conversation_id=str(conversation_id))
+        poll_interval_s = 1
+        heartbeat_every = 5  # send heartbeat every 5 polls
+        max_polls = config.sse_poll_timeout_seconds // poll_interval_s
         try:
-            # Poll until result available (max 60s)
-            for _ in range(60):
+            for tick in range(max_polls):
                 if await request.is_disconnected():
                     return
                 raw = await r.get(result_key)
                 if raw:
                     break
-                yield f"data: {json.dumps({'event': 'heartbeat'})}\n\n"
-                await asyncio.sleep(1)
+                if tick % heartbeat_every == 0:
+                    yield f"data: {json.dumps({'event': 'heartbeat'})}\n\n"
+                await asyncio.sleep(poll_interval_s)
             else:
                 from refund_pilot.core.metrics import TASK_FAILURES
 
                 TASK_FAILURES.inc()
-                yield f"data: {json.dumps({'event': 'error', 'detail': 'timeout'})}\n\n"
+                log.error(
+                    "sse_timeout",
+                    wait_seconds=config.sse_poll_timeout_seconds,
+                    result_key=result_key,
+                )
+                fallback_text = (
+                    FallbackHandler().handle("")
+                    or "We're unable to process your request right now. Please try again shortly."
+                )
+                # Stream fallback as normal tokens so UI renders it like any other response
+                for i, word in enumerate(fallback_text.split(" ")):
+                    chunk = word if i == 0 else f" {word}"
+                    yield f"data: {json.dumps({'event': 'token', 'text': chunk})}\n\n"
+                    await asyncio.sleep(0.03)
+                yield f"data: {json.dumps({'event': 'done', 'decision': 'fallback', 'run_id': None, 'injection_detected': False})}\n\n"
                 return
 
             await r.delete(result_key)

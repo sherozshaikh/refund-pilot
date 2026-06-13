@@ -11,10 +11,12 @@ ingester:
       replication_factor: 1
   chunk_idle_period: 1h
   max_chunk_age: 1h
+  wal:
+    dir: /loki/wal
 
 schema_config:
   configs:
-    - from: "2026-06-11"
+    - from: "2026-06-13"
       store: tsdb
       object_store: filesystem
       schema: v13
@@ -35,3 +37,4 @@ limits_config:
 compactor:
   working_directory: /loki/compactor
   retention_enabled: true
+  delete_request_store: filesystem

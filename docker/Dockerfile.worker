@@ -6,4 +6,4 @@ COPY pyproject.toml uv.lock ./
 COPY src/ src/
 RUN uv sync --frozen --no-dev
 ENV PATH="/app/.venv/bin:$PATH"
-CMD ["sh", "-c", "celery -A refund_pilot.workers.celery_app worker -Q ${PIPELINE_CELERY_QUEUE_NAME:-refund_requests} --max-tasks-per-child=100 --loglevel=info"]
+CMD ["sh", "-c", "celery -A refund_pilot.workers.celery_app worker -Q ${PIPELINE_CELERY_QUEUE_NAME:-refund_requests} --concurrency=${PIPELINE_CELERY_CONCURRENCY:-1} --max-tasks-per-child=100 --loglevel=info"]

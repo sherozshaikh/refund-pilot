@@ -95,21 +95,27 @@ ANTHROPIC_API_KEY=sk-ant-...
 JWT_SECRET_KEY=<python -c "import secrets; print(secrets.token_hex(32))">
 ```
 
-**3. Pull images and start:**
+**3. Bring up the whole stack:**
 
 ```bash
-docker compose pull
-docker compose up -d
+make up
 ```
+
+This pulls images, starts everything detached (`docker compose up -d`), and prints the access URLs — local login plus the public tunnel URLs.
 
 First boot seeds 15 synthetic customers + 30 orders automatically. Wait ~15 seconds.
 
 | Service | URL | Credentials |
 |---------|-----|-------------|
-| Chat UI | http://localhost | — |
+| Chat UI (login gate) | http://localhost | `GATE_USER` / `GATE_PASS` (default `admin` / `admin`) |
 | API docs | http://localhost:8000/docs | — |
 | Grafana | http://localhost:3000 | admin / admin |
 | Prometheus | http://localhost:9090 | — |
+| Public tunnel URLs | from `make urls` | ephemeral `*.trycloudflare.com` |
+
+The Chat UI sits behind a login gate (nginx + njs). Visiting http://localhost shows a login page first; log out at `/logout`.
+
+`make up` also publishes ephemeral public https URLs via Cloudflare quick tunnels (no Cloudflare account needed): one for the login-gated frontend and one for Grafana. These URLs regenerate on every restart — retrieve them anytime with `make urls` (or `./scripts/cf-urls.sh`). The public frontend is protected by the login gate, but **Grafana exposed publicly is only protected by its own admin/admin login** — change it or do not share the URL.
 
 See [docs/docker-quickstart.md](docs/docker-quickstart.md) for model swap, policy config, scaling, and troubleshooting.
 
@@ -220,6 +226,9 @@ See [docs/agent-design.md](docs/agent-design.md) for full design documentation.
 |----------|----------|---------|-------------|
 | `ANTHROPIC_API_KEY` | ✅ | — | Claude API key |
 | `JWT_SECRET_KEY` | ✅ | — | Admin auth secret — generate: `python -c "import secrets; print(secrets.token_hex(32))"` |
+| `GATE_USER` | — | `admin` | Frontend login-gate username |
+| `GATE_PASS` | — | `admin` | Frontend login-gate password |
+| `GATE_SECRET` | — | — | Session-cookie signing secret (HMAC) — use a random value: `openssl rand -hex 24` |
 | `CLAUDE_MODEL` | — | `claude-haiku-4-5` | Model ID |
 | `LANGCHAIN_API_KEY` | — | — | LangSmith tracing (optional) |
 | `DATABASE_URL` | — | postgres://... (compose default) | PostgreSQL async URL |
@@ -237,13 +246,14 @@ See `.env.example` for the full list with comments.
 ## Development
 
 ```bash
+make up         # pull images, start the whole stack detached, print access URLs
 make install    # uv sync
 make migrate    # alembic upgrade head
 make seed       # 15 customers + 30 orders
 make test       # 88 tests — no API key required
 make lint       # ruff check + mypy strict (src/ only)
 make format     # ruff format
-make dev        # docker compose up --build
+make dev        # docker compose up --build (foreground)
 ```
 
 ### Scale Workers
@@ -257,13 +267,20 @@ docker compose scale worker=4
 ## Makefile Reference
 
 ```
+Stack (one command):
+  make up               pull images, start whole stack detached, print access URLs
+  make pull             docker compose pull
+  make urls / tunnels   print the public cloudflared tunnel URLs (ephemeral)
+  make restart          docker compose restart
+  make ps               docker compose ps
+
 Setup:
   make install          uv sync — install Python deps
   make migrate          alembic upgrade head
   make seed             seed 15 customers + 30 orders
 
 Development:
-  make dev              docker compose up --build
+  make dev              docker compose up --build (foreground)
   make down             docker compose down
   make down-clean       docker compose down -v (wipe volumes)
   make test             pytest (no API key required)
@@ -272,9 +289,8 @@ Development:
   make pre-commit       pre-commit run --all-files
 
 Docker:
-  make docker-build     build all 3 images for local arch
-  make docker-push      push tagged + latest to Docker Hub
-  make docker-build-push  build multi-platform (amd64+arm64) + push in one step
+  make docker-build     gate check (clean → format → lint → pre-commit → test → hadolint) then build all 3 images locally
+  make docker-push      push locally built images to Docker Hub (run docker-build + verify first)
   make hadolint         lint all Dockerfiles
 
 Ops:

@@ -73,6 +73,14 @@ class PipelineConfig(BaseSettings):
     celery_queue_name: str = "refund_requests"
     celery_max_retries: int = 3
     celery_retry_backoff_seconds: int = 5
+    celery_concurrency: int = 1
+
+    # Rate limiting
+    rate_limit_requests: int = 5
+    rate_limit_window_seconds: int = 60
+
+    # SSE stream timeout
+    sse_poll_timeout_seconds: int = 120
 
     fallback_enabled: bool = True
 

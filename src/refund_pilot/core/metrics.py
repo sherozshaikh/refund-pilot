@@ -110,3 +110,18 @@ CACHE_READ_TOKENS = Counter(
     "refund_cache_read_tokens_total",
     "Tokens read from prompt cache (cache hit — 90% cheaper than input tokens)",
 )
+
+# ---------------------------------------------------------------------------
+# Multi-turn pushback
+# ---------------------------------------------------------------------------
+
+RESTATE_TOTAL = Counter(
+    "refund_restate_total",
+    "Turn 2+ requests where prior terminal decision was restated (customer pushback)",
+)
+
+RESTATE_RESPONSE_CHARS = Histogram(
+    "refund_restate_response_chars",
+    "Character length distribution of Claude restate responses (turn 2+)",
+    buckets=[20, 40, 60, 80, 100, 120, 160, 200],
+)

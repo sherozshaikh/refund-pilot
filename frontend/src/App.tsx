@@ -75,7 +75,7 @@ function Sidebar({ view, setView }: { view: View; setView: (v: View) => void }) 
         <div className="mx-4 mt-3 rounded-xl bg-white/5 px-4 py-3 border border-white/10">
           <div className="flex items-start gap-2.5">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 text-xs font-bold text-white">
-              {selectedCustomer.name.split(' ').map((w) => w[0]).slice(0, 2).join('')}
+              {selectedCustomer.name.split(' ').map((w: string) => w[0]).slice(0, 2).join('')}
             </div>
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-gray-100">{selectedCustomer.name}</p>
@@ -117,6 +117,12 @@ function Sidebar({ view, setView }: { view: View; setView: (v: View) => void }) 
             Sign out
           </button>
         )}
+        <a
+          href="/logout"
+          className="flex w-full items-center justify-center rounded-lg border border-white/10 px-3 py-2 text-xs text-gray-500 hover:bg-white/5 hover:text-gray-300 transition-colors"
+        >
+          ↪ Log out
+        </a>
       </div>
     </aside>
   )

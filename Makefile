@@ -1,4 +1,5 @@
-.PHONY: install dev down down-clean migrate seed test lint format build \
+.PHONY: install dev up pull restart ps status urls tunnels down down-clean \
+        migrate seed test lint format build clean _gate \
         docker-build docker-push docker-build-push logs shell-db hadolint pre-commit
 
 REGISTRY   := sherozshaikh
@@ -6,6 +7,39 @@ APP        := refund-pilot
 VERSION    := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 PLATFORMS  := linux/amd64,linux/arm64
 BUILDER    := mybuilder
+
+# -- stack (one command) ------------------------------------------------------
+# Bring up the ENTIRE stack detached, then print how to reach everything.
+
+up:
+	@test -f .env || echo "  (note: no .env found — run 'cp .env.example .env' to customize; using defaults)"
+	docker compose up -d
+	@echo ""
+	@echo "============================================================"
+	@echo "  Refund Pilot is up."
+	@echo "============================================================"
+	@user=$$(grep -E '^GATE_USER=' .env 2>/dev/null | cut -d= -f2- || true); user=$${user:-admin}; \
+	pass=$$(grep -E '^GATE_PASS=' .env 2>/dev/null | cut -d= -f2- || true); pass=$${pass:-admin}; \
+	echo "  Frontend (login):  http://localhost"; \
+	echo "      Login:         $$user / $$pass"
+	@echo "  Grafana:           http://localhost:3000   (admin / admin)"
+	@echo "  API docs:          http://localhost:8000/docs"
+	@echo "  Prometheus:        http://localhost:9090"
+	@echo "============================================================"
+	@echo "  Resolving public tunnel URLs (may take ~30s)..."
+	@./scripts/cf-urls.sh
+
+pull:
+	docker compose pull
+
+restart:
+	docker compose restart
+
+ps status:
+	docker compose ps
+
+urls tunnels:
+	@./scripts/cf-urls.sh
 
 # -- local dev ----------------------------------------------------------------
 
@@ -39,6 +73,7 @@ lint:
 
 format:
 	uv run ruff format src/ tests/
+	uv run ruff check src/ tests/ --fix
 
 build:
 	uv build --wheel
@@ -59,8 +94,22 @@ clean:
 # -- docker -------------------------------------------------------------------
 # Each service is an independently deployable image.
 # Tags: :<version> (immutable) + :latest (mutable pointer).
+#
+# docker-build      → full gate (clean/format/lint/pre-commit/test/hadolint) + local build
+# docker-push       → push already-built local images (run docker-build + verify first)
+# docker-build-push → full gate + multi-platform buildx + push in one shot
 
-docker-build:
+.PHONY: _gate
+
+_gate:
+	$(MAKE) clean
+	$(MAKE) format
+	$(MAKE) lint
+	$(MAKE) pre-commit
+	$(MAKE) test
+	$(MAKE) hadolint
+
+docker-build: _gate
 	docker build -f docker/Dockerfile.backend \
 	    -t $(REGISTRY)/$(APP)-backend:latest .
 	docker build -f docker/Dockerfile.worker \
@@ -73,7 +122,7 @@ docker-push:
 	docker push $(REGISTRY)/$(APP)-worker:latest
 	docker push $(REGISTRY)/$(APP)-frontend:latest
 
-docker-build-push:
+docker-build-push: _gate
 	docker buildx build --builder $(BUILDER) --platform $(PLATFORMS) --push \
 	    -f docker/Dockerfile.backend \
 	    -t $(REGISTRY)/$(APP)-backend:latest .

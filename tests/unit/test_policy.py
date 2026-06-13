@@ -10,7 +10,7 @@ from refund_pilot.core.config import PipelineConfig
 
 pytestmark = pytest.mark.no_api
 
-TODAY = date(2026, 6, 6)
+TODAY = date(2026, 6, 13)
 
 
 def days_ago(n: int) -> date:
