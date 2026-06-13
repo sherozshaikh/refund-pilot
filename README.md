@@ -16,7 +16,7 @@ An e-commerce refund agent built for production. Customer messages arrive at a R
 
 ## Demo
 
-[![Watch the demo](https://cdn.loom.com/sessions/thumbnails/5b819e735c6647efb1411b7e55e3a6c3-with-play.gif)](https://www.loom.com/share/5b819e735c6647efb1411b7e55e3a6c3)
+[▶ Watch the 5-minute walkthrough on Loom](https://www.loom.com/share/5b819e735c6647efb1411b7e55e3a6c3)
 
 ---
 
