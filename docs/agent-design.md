@@ -95,6 +95,11 @@ All policy thresholds are environment-controlled via `PipelineConfig`:
 | `PIPELINE_MAX_REFUNDS_30D` | `3` | Fraud escalation threshold (refunds in 30 days) |
 | `PIPELINE_MAX_RETRIES` | `3` | Tenacity retry limit for Claude API calls |
 | `PIPELINE_FALLBACK_ENABLED` | `true` | Enable regex fallback when Claude unavailable |
+| `PIPELINE_RATE_LIMIT_REQUESTS` | `5` | Max requests per customer per rate-limit window |
+| `PIPELINE_RATE_LIMIT_WINDOW_SECONDS` | `60` | Rate-limit window in seconds |
+| `PIPELINE_SSE_POLL_TIMEOUT_SECONDS` | `120` | SSE stream timeout before fallback response |
+| `PIPELINE_TOOL_CACHE_TTL_SECONDS` | `1800` | Redis TTL for cached customer/order tool results |
+| `PIPELINE_CELERY_CONCURRENCY` | `1` | Celery worker threads per container |
 | `CLAUDE_MODEL` | `claude-haiku-4-5` | Model ID — swap to Sonnet/Opus for higher accuracy |
 
 Changing a threshold requires only an env var update and container restart — no code change.

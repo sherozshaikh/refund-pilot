@@ -103,6 +103,11 @@ PIPELINE_ESCALATION_THRESHOLD_USD=500   # auto-escalate orders above this amount
 PIPELINE_REFUND_WINDOW_DAYS=30          # eligibility window in days
 PIPELINE_MAX_RETRIES=3                  # Claude API retry limit
 PIPELINE_FALLBACK_ENABLED=true          # regex fallback when API unavailable
+PIPELINE_RATE_LIMIT_REQUESTS=5          # max requests per customer per window
+PIPELINE_RATE_LIMIT_WINDOW_SECONDS=60   # rate-limit window in seconds
+PIPELINE_SSE_POLL_TIMEOUT_SECONDS=120   # SSE stream timeout before fallback response
+PIPELINE_TOOL_CACHE_TTL_SECONDS=1800    # Redis TTL for cached customer/order results
+PIPELINE_CELERY_CONCURRENCY=1           # Celery worker threads per container
 ```
 
 ## Scale workers
@@ -128,4 +133,4 @@ docker compose down -v       # wipe all volumes
 
 **LangSmith links not clickable** — `LANGCHAIN_API_KEY` not set or expired. Get a new key at [smith.langchain.com](https://smith.langchain.com) → Settings → API Keys.
 
-**Rate limit errors (429)** — each customer is limited to 20 requests per 60-second window. Switch customer from the dropdown.
+**Rate limit errors (429)** — each customer is limited to 5 requests per 60-second window (configurable via `PIPELINE_RATE_LIMIT_REQUESTS` / `PIPELINE_RATE_LIMIT_WINDOW_SECONDS`). Switch customer from the dropdown.
